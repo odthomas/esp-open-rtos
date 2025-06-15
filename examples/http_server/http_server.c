@@ -12,8 +12,30 @@
 #include <task.h>
 #include <ssid_config.h>
 #include <httpd/httpd.h>
+#include <espressif/esp_wifi.h>
 
 #define LED_PIN 2
+
+static const char *get_ip_address(void)
+{
+    static char ip_str[16] = "0.0.0.0";
+    struct ip_info info;
+    if (sdk_wifi_get_ip_info(STATION_IF, &info)) {
+        snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&info.ip));
+    } else {
+        strcpy(ip_str, "0.0.0.0");
+    }
+    return ip_str;
+}
+
+static void ip_log_task(void *pvParameters)
+{
+    while (sdk_wifi_station_get_connect_status() != STATION_GOT_IP) {
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+    printf("IP Address: %s\n", get_ip_address());
+    vTaskDelete(NULL);
+}
 
 enum {
     SSI_UPTIME,
@@ -198,5 +220,6 @@ void user_init(void)
     gpio_write(LED_PIN, true);
 
     /* initialize tasks */
+    xTaskCreate(&ip_log_task, "ip_log", 256, NULL, 2, NULL);
     xTaskCreate(&httpd_task, "HTTP Daemon", 128, NULL, 2, NULL);
 }
